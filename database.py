@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime
+import time
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
@@ -14,6 +15,8 @@ except ImportError:
 
 class TaskManager:
     def __init__(self):
+        self._cached_data = None
+        self._cache_time = 0
         self.db_url = DATABASE_URL
         if self.db_url:
             self.pool = SimpleConnectionPool(1, 20, self.db_url, cursor_factory=RealDictCursor)
@@ -71,6 +74,9 @@ class TaskManager:
             conn.commit()
 
     def get_all_data(self):
+        if time.time() - self._cache_time < 1 and self._cached_data:
+            return self._cached_data
+            
         if self.db_url:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
@@ -80,17 +86,24 @@ class TaskManager:
                     members = [dict(row) for row in cur.fetchall()]
                     cur.execute("SELECT * FROM tasks")
                     tasks = [dict(row) for row in cur.fetchall()]
-                    return {"projects": projects, "members": members, "tasks": tasks}
+                    self._cached_data = {"projects": projects, "members": members, "tasks": tasks}
+                    self._cache_time = time.time()
+                    return self._cached_data
         else:
             with open(self.file_path, 'r') as f:
-                return json.load(f)
+                self._cached_data = json.load(f)
+                self._cache_time = time.time()
+                return self._cached_data
                 
     def _save_data(self, data):
+        self._cached_data = None
+        self._cache_time = 0
         if not self.db_url:
             with open(self.file_path, 'w') as f:
                 json.dump(data, f, indent=2)
 
     def add_member(self, name, role="Member"):
+        self._cache_time = 0
         if self.db_url:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
@@ -103,6 +116,7 @@ class TaskManager:
         return member
 
     def add_project(self, name, description=""):
+        self._cache_time = 0
         if self.db_url:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
@@ -115,6 +129,7 @@ class TaskManager:
         return project
 
     def add_task(self, title, description, project_id, assigned_to=None, due_date=None, priority="medium"):
+        self._cache_time = 0
         created = datetime.now().isoformat()
         assigned_date = datetime.now().isoformat() if assigned_to else None
         
@@ -139,6 +154,7 @@ class TaskManager:
         return task_data
 
     def update_task(self, task_id, title, description, project_id, assigned_to, due_date, priority="medium"):
+        self._cache_time = 0
         if self.db_url:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
@@ -171,6 +187,7 @@ class TaskManager:
         return False
 
     def complete_task(self, task_id):
+        self._cache_time = 0
         completed_date = datetime.now().isoformat()
         if self.db_url:
             with self._get_conn() as conn:
@@ -188,6 +205,7 @@ class TaskManager:
         return False
 
     def uncomplete_task(self, task_id):
+        self._cache_time = 0
         if self.db_url:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
@@ -204,6 +222,7 @@ class TaskManager:
         return False
 
     def delete_task(self, task_id):
+        self._cache_time = 0
         if self.db_url:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
