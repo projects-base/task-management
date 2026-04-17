@@ -59,9 +59,56 @@ def get_base_html(title, body_content):
                 editDiv.style.display = isHidden ? 'block' : 'none';
             }}
         }}
+        function toggleQuickAdd() {{
+            const modal = document.getElementById('quickAddModal');
+            modal.classList.toggle('show');
+        }}
+        function closeQuickAdd(event) {{
+            if (event.target.id === 'quickAddModal') {{
+                toggleQuickAdd();
+            }}
+        }}
     </script>
     
     {body_content}
+    
+    <div class="fab" onclick="toggleQuickAdd()">
+        <i class="fas fa-plus"></i>
+    </div>
+    
+    <div id="quickAddModal" class="modal-overlay" onclick="closeQuickAdd(event)">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 style="margin: 0;">Quick Add Task</h3>
+                <button class="modal-close" onclick="toggleQuickAdd()">&times;</button>
+            </div>
+            <form method="POST" action="/add_task" style="display: flex; flex-direction: column; gap: 15px;">
+                <input type="text" name="title" placeholder="What needs to be done?" required style="width: 100%; font-size: 16px;">
+                <textarea name="description" placeholder="Optional details..." rows="3" style="width: 100%;"></textarea>
+                <div style="display: flex; gap: 10px;">
+                    <select name="project_id" required style="flex: 1;">
+                        <option value="">Select Project</option>
+                        {render_project_options(select_first=True)}
+                    </select>
+                    <select name="assigned_to" style="flex: 1;">
+                        <option value="">Unassigned</option>
+                        {render_member_options(select_first=True)}
+                    </select>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <select name="priority" style="flex: 1;">
+                        <option value="low">Low Priority</option>
+                        <option value="medium" selected>Medium Priority</option>
+                        <option value="high">High Priority</option>
+                    </select>
+                    <input type="date" name="due_date" style="flex: 1;" value="{(datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')}">
+                </div>
+                <button type="submit" class="btn btn-complete" style="width: 100%; justify-content: center; margin-top: 10px; font-size: 16px; padding: 12px;">
+                    <i class="fas fa-bolt"></i> Add Task Instantly
+                </button>
+            </form>
+        </div>
+    </div>
 </body>
 </html>
     """
