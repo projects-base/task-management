@@ -3,6 +3,8 @@ import json
 from datetime import datetime
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from psycopg2.pool import SimpleConnectionPool
+from contextlib import contextmanager
 
 # Import configuration
 try:
@@ -14,6 +16,7 @@ class TaskManager:
     def __init__(self):
         self.db_url = DATABASE_URL
         if self.db_url:
+            self.pool = SimpleConnectionPool(1, 20, self.db_url, cursor_factory=RealDictCursor)
             self._init_db()
         else:
             self.file_path = "card_tasks.json"
@@ -21,8 +24,17 @@ class TaskManager:
                 with open(self.file_path, 'w') as f:
                     json.dump({"projects": [], "members": [], "tasks": []}, f)
                     
+    @contextmanager
     def _get_conn(self):
-        return psycopg2.connect(self.db_url, cursor_factory=RealDictCursor)
+        conn = self.pool.getconn()
+        try:
+            yield conn
+            conn.commit()
+        except:
+            conn.rollback()
+            raise
+        finally:
+            self.pool.putconn(conn)
         
     def _init_db(self):
         with self._get_conn() as conn:
