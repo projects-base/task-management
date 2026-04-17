@@ -238,8 +238,11 @@ class TaskManager:
     def is_overdue(self, task):
         if not task.get("due_date") or task.get("completed"):
             return False
-        due = datetime.fromisoformat(task["due_date"])
-        return datetime.now() > due
+        try:
+            due_date = datetime.fromisoformat(task["due_date"][:10]).date()
+            return datetime.now().date() > due_date
+        except ValueError:
+            return False
     
     def group_tasks(self, group_by, layout="horizontal"):
         data = self.get_all_data()
