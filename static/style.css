@@ -179,6 +179,11 @@ input::placeholder, textarea::placeholder {
     color: var(--text-muted);
 }
 
+option {
+    background: var(--bg-color);
+    color: #fff;
+}
+
 /* Buttons */
 button, .btn {
     padding: 10px 16px;
