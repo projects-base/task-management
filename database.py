@@ -258,9 +258,12 @@ class TaskManager:
         if not task.get("due_date") or task.get("completed"):
             return False
         try:
-            due_date = datetime.fromisoformat(task["due_date"][:10]).date()
+            due_str = task["due_date"]
+            if 'T' in due_str:
+                due_str = due_str.split('T')[0]
+            due_date = datetime.strptime(due_str[:10], "%Y-%m-%d").date()
             return datetime.now().date() > due_date
-        except ValueError:
+        except Exception:
             return False
     
     def group_tasks(self, group_by, layout="horizontal"):
@@ -293,8 +296,8 @@ class TaskManager:
         tasks = data["tasks"]
         total = len(tasks)
         completed = len([t for t in tasks if t.get("completed")])
-        pending = len([t for t in tasks if not t.get("completed")])
         overdue = len([t for t in tasks if self.is_overdue(t) and not t.get("completed")])
+        pending = len([t for t in tasks if not t.get("completed") and not self.is_overdue(t)])
         
         recent_completed = [t for t in tasks if t.get("completed") and t.get("completed_date")]
         recent_completed.sort(key=lambda x: x["completed_date"], reverse=True)

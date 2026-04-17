@@ -140,7 +140,7 @@ def render_recent_tasks(tasks):
 
 def render_pending_tasks():
     data = tm.get_all_data()
-    pending_tasks = [t for t in data["tasks"] if not t.get("completed")]
+    pending_tasks = [t for t in data["tasks"] if not t.get("completed") and not tm.is_overdue(t)]
     if not pending_tasks: return "<p style='color: var(--text-muted);'>No pending tasks</p>"
     html_content = ""
     for task in pending_tasks[:5]:
@@ -326,7 +326,7 @@ def build_tasks(group_by, layout, filter_type):
     data = tm.get_all_data()
     tasks = data["tasks"]
     if filter_type == "completed": tasks = [t for t in tasks if t.get("completed")]
-    elif filter_type == "pending": tasks = [t for t in tasks if not t.get("completed")]
+    elif filter_type == "pending": tasks = [t for t in tasks if not t.get("completed") and not tm.is_overdue(t)]
     elif filter_type == "overdue": tasks = [t for t in tasks if tm.is_overdue(t) and not t.get("completed")]
     elif filter_type == "upcoming": tasks = [t for t in tasks if t.get("due_date") and not t.get("completed") and not tm.is_overdue(t)]
     
