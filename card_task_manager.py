@@ -60,7 +60,7 @@ try:
     from config import DATABASE_URL, HOST, PORT
 except ImportError:
     DATABASE_URL = os.getenv('DATABASE_URL', '')
-    HOST = os.getenv('HOST', 'localhost')
+    HOST = os.getenv('HOST', '0.0.0.0')
     PORT = int(os.getenv('PORT', 8000))
 
 class TaskManager:
