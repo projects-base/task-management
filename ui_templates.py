@@ -17,6 +17,10 @@ def get_base_html(title, body_content):
 <body>
     <div class="nav">
         <div class="nav-left">
+            <div class="brand" onclick="window.location.href='/'">
+                <img src="/static/logo.png" alt="Logo" class="logo-img">
+                <span class="brand-name">Task Manager</span>
+            </div>
             <a href="/" class="{'active' if title == 'Dashboard' else ''}">Dashboard</a>
             <a href="/tasks" class="{'active' if title == 'Tasks' else ''}">Tasks</a>
             <a href="/projects" class="{'active' if title == 'Projects' else ''}">Projects</a>

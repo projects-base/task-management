@@ -8,6 +8,9 @@ from urllib.parse import parse_qs, urlparse
 from database import tm
 from jira_api import jira
 import ui_templates
+import threading
+import time
+import re
 
 try:
     from config import DATABASE_URL, HOST, PORT
@@ -138,6 +141,55 @@ class TaskHandler(BaseHTTPRequestHandler):
         self.send_header('Location', self.headers.get('Referer', '/'))
         self.end_headers()
 
+def background_sync():
+    print("Background sync worker started (3s interval)")
+    jira_key_regex = re.compile(r'\[([A-Z]+-\d+)\]')
+    
+    while True:
+        try:
+            # Check if JIRA is configured
+            if not all([jira.server_url, jira.username, jira.api_token]):
+                # Silently skip if not configured, or log once
+                time.sleep(10) # Wait longer if not configured
+                continue
+                
+            data = tm.get_all_data()
+            tasks = data.get('tasks', [])
+            
+            for task in tasks:
+                title = task.get('title', '')
+                match = jira_key_regex.search(title)
+                if match:
+                    jira_key = match.group(1)
+                    # print(f"Polling JIRA for {jira_key}...")
+                    jira_data = jira.get_ticket_details(jira_key)
+                    
+                    if "error" not in jira_data:
+                        # Sync status
+                        jira_status = jira_data.get('status', '').lower()
+                        is_completed = task.get('completed', False)
+                        
+                        # Logic: If JIRA says Done/Closed, mark as completed
+                        if jira_status in ['done', 'closed', 'resolved', 'finished'] and not is_completed:
+                            print(f"Sync: Marking {jira_key} as completed based on JIRA status.")
+                            tm.complete_task(task['id'])
+                        elif jira_status not in ['done', 'closed', 'resolved', 'finished'] and is_completed:
+                            # print(f"Sync: Unmarking {jira_key} as completed based on JIRA status.")
+                            # tm.uncomplete_task(task['id'])
+                            pass # Usually safer to not uncomplete automatically without confirmation
+                            
+                        # Sync priority
+                        jira_priority = jira_data.get('priority', 'medium').lower()
+                        current_priority = task.get('priority', 'medium').lower()
+                        if jira_priority != current_priority and jira_priority in ['low', 'medium', 'high']:
+                            print(f"Sync: Updating priority for {jira_key} to {jira_priority}.")
+                            tm.update_task_priority(task['id'], jira_priority)
+
+        except Exception as e:
+            print(f"Background sync error: {e}")
+            
+        time.sleep(3)
+
 if __name__ == "__main__":
     server = HTTPServer((HOST, PORT), TaskHandler)
     db_type = "PostgreSQL" if DATABASE_URL else "Local JSON"
@@ -145,4 +197,8 @@ if __name__ == "__main__":
     print(f"Database: {db_type}")
     if not DATABASE_URL:
         print("Warning: DATABASE_URL not set, falling back to ephemeral local JSON.")
+    
+    # Start background scheduler
+    threading.Thread(target=background_sync, daemon=True).start()
+    
     server.serve_forever()

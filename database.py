@@ -233,6 +233,22 @@ class TaskManager:
         data["tasks"] = [task for task in data["tasks"] if task["id"] != task_id]
         self._save_data(data)
         return True
+
+    def update_task_priority(self, task_id, priority):
+        self._cache_time = 0
+        if self.db_url:
+            with self._get_conn() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("UPDATE tasks SET priority=%s WHERE id=%s", (priority.lower(), task_id))
+            return True
+        
+        data = self.get_all_data()
+        for task in data["tasks"]:
+            if task["id"] == task_id:
+                task["priority"] = priority.lower()
+                self._save_data(data)
+                return True
+        return False
     
     def get_project_name(self, project_id):
         data = self.get_all_data()
