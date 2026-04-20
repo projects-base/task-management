@@ -11,6 +11,7 @@ import ui_templates
 import threading
 import time
 import re
+import urllib.request
 
 try:
     from config import DATABASE_URL, HOST, PORT
@@ -18,6 +19,9 @@ except ImportError:
     DATABASE_URL = os.getenv('DATABASE_URL', '')
     HOST = '0.0.0.0'
     PORT = int(os.getenv('PORT', 8000))
+
+# Global to store the host URL for self-pinging
+DETECTED_URL = None
 
 class TaskHandler(BaseHTTPRequestHandler):
     def serve_static(self, path):
@@ -38,6 +42,13 @@ class TaskHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_GET(self):
+        global DETECTED_URL
+        if not DETECTED_URL:
+            # Detect public URL from Host header
+            proto = self.headers.get('X-Forwarded-Proto', 'http')
+            DETECTED_URL = f"{proto}://{self.headers.get('Host')}"
+            print(f"Detected Public URL: {DETECTED_URL}")
+
         parsed = urlparse(self.path)
         path = parsed.path
         query = parse_qs(parsed.query)
@@ -142,53 +153,36 @@ class TaskHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
 def background_sync():
-    print("Background sync worker started (3s interval)")
+    global DETECTED_URL
+    print("Background worker: Waiting for first request to detect public URL...")
+
     jira_key_regex = re.compile(r'\[([A-Z]+-\d+)\]')
     
     while True:
         try:
-            # Check if JIRA is configured
-            if not all([jira.server_url, jira.username, jira.api_token]):
-                # Silently skip if not configured, or log once
-                time.sleep(10) # Wait longer if not configured
-                continue
-                
-            data = tm.get_all_data()
-            tasks = data.get('tasks', [])
+            # 1. Keep-Alive Heartbeat (Self-Ping)
+            effective_url = DETECTED_URL or os.getenv('RENDER_EXTERNAL_URL') or os.getenv('PUBLIC_URL')
             
-            for task in tasks:
-                title = task.get('title', '')
-                match = jira_key_regex.search(title)
-                if match:
-                    jira_key = match.group(1)
-                    # print(f"Polling JIRA for {jira_key}...")
-                    jira_data = jira.get_ticket_details(jira_key)
-                    
-                    if "error" not in jira_data:
-                        # Sync status
-                        jira_status = jira_data.get('status', '').lower()
-                        is_completed = task.get('completed', False)
-                        
-                        # Logic: If JIRA says Done/Closed, mark as completed
-                        if jira_status in ['done', 'closed', 'resolved', 'finished'] and not is_completed:
-                            print(f"Sync: Marking {jira_key} as completed based on JIRA status.")
-                            tm.complete_task(task['id'])
-                        elif jira_status not in ['done', 'closed', 'resolved', 'finished'] and is_completed:
-                            # print(f"Sync: Unmarking {jira_key} as completed based on JIRA status.")
-                            # tm.uncomplete_task(task['id'])
-                            pass # Usually safer to not uncomplete automatically without confirmation
-                            
-                        # Sync priority
-                        jira_priority = jira_data.get('priority', 'medium').lower()
-                        current_priority = task.get('priority', 'medium').lower()
-                        if jira_priority != current_priority and jira_priority in ['low', 'medium', 'high']:
-                            print(f"Sync: Updating priority for {jira_key} to {jira_priority}.")
-                            tm.update_task_priority(task['id'], jira_priority)
+            if effective_url:
+                try:
+                    # print(f"Heartbeat: Pinging {effective_url}...")
+                    with urllib.request.urlopen(effective_url, timeout=10) as response:
+                        if response.status == 200:
+                            # print("Heartbeat: SUCCESS")
+                            pass
+                except Exception as ping_err:
+                    print(f"Heartbeat error: {ping_err}")
 
+            # 2. Jira Sync (Disabled as per user request)
+            # if all([jira.server_url, jira.username, jira.api_token]):
+            #     data = tm.get_all_data()
+            #     ... (logic omitted or commented out)
+                
         except Exception as e:
             print(f"Background sync error: {e}")
             
-        time.sleep(3)
+        # Poll every 45 seconds to stay within potential 50s activity window
+        time.sleep(45)
 
 if __name__ == "__main__":
     server = HTTPServer((HOST, PORT), TaskHandler)
